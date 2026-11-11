@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#6c5ce7" id="metaTema">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>Memorama</title>
+  <style>
+    :root {
+      --tema: #6c5ce7; --tema2: #a29bfe;
+      --dorso: #4834d4; --frente: #ffffff; --acierto: #55efc4;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0; min-height: 100vh; font-family: system-ui, sans-serif; color: #fff;
+      background: linear-gradient(160deg, var(--tema), var(--tema2)) fixed;
+      display: flex; flex-direction: column; align-items: center; padding: 16px;
+    }
+    .oculto { display: none !important; }
+    h1 { margin: 6px 0 0; text-shadow: 0 1px 3px rgba(0,0,0,.3); }
+    #subtitulo { margin: 2px 0 10px; opacity: .9; text-shadow: 0 1px 2px rgba(0,0,0,.3); text-align: center; }
+    .barra { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; font-size: 1.05rem; flex-wrap: wrap; justify-content: center; text-shadow: 0 1px 2px rgba(0,0,0,.25); }
+    select, button {
+      font-size: 1rem; padding: 8px 14px; border-radius: 10px; border: none;
+      background: #fff; color: #4834d4; font-weight: bold;
+    }
+
+    /* ---------- Tablero ---------- */
+    #tablero { display: grid; gap: 10px; width: 100%; max-width: 440px; }
+    .carta { aspect-ratio: 1; perspective: 600px; cursor: pointer; }
+    .interior { position: relative; width: 100%; height: 100%; transition: transform .4s; transform-style: preserve-3d; }
+    .carta.volteada .interior, .carta.acertada .interior { transform: rotateY(180deg); }
+    .cara {
+      position: absolute; inset: 0; border-radius: 12px; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      backface-visibility: hidden; -webkit-backface-visibility: hidden;
+      font-size: clamp(1.6rem, 9vw, 2.8rem);
+    }
+    .frente { background-color: var(--dorso); box-shadow: 0 3px 6px rgba(0,0,0,.25); }
+    .atras { background: var(--frente); transform: rotateY(180deg); color: #2d3436; }
+    .atras::after { content: ''; position: absolute; inset: 0; border-radius: 12px; pointer-events: none; }
+    .carta.acertada .atras { background: var(--acierto); }
+    .carta.acertada .atras::after { box-shadow: inset 0 0 0 5px var(--acierto); }
+    .cara img.cubrir { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .frente.modo-logo img.logo { position: absolute; inset: 14%; width: 72%; height: 72%; object-fit: contain; }
+    .signo { font-size: 1.6rem; }
+
+    /* Texturas del dorso (se dibujan sobre el color elegido) */
+    .tex-puntos   { background-image: radial-gradient(rgba(255,255,255,.4) 18%, transparent 20%); background-size: 14px 14px; }
+    .tex-rayas    { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.28) 0 6px, transparent 6px 14px); }
+    .tex-cuadros  { background-image: conic-gradient(rgba(255,255,255,.28) 25%, transparent 0 50%, rgba(255,255,255,.28) 0 75%, transparent 0); background-size: 26px 26px; }
+    .tex-rejilla  { background-image: linear-gradient(rgba(255,255,255,.3) 2px, transparent 2px), linear-gradient(90deg, rgba(255,255,255,.3) 2px, transparent 2px); background-size: 18px 18px; }
+
+    /* Número de carta */
+    .num {
+      position: absolute; top: 5px; left: 5px; z-index: 2; min-width: 1.6em; text-align: center;
+      background: rgba(0,0,0,.55); color: #fff; font: bold clamp(.75rem, 3.6vw, 1rem)/1 system-ui, sans-serif;
+      padding: 4px 6px; border-radius: 999px;
+    }
+
+    /* Imagen no disponible */
+    .roto-icono { display: flex; flex-direction: column; align-items: center; gap: 2px; color: #636e72; text-align: center; padding: 4px; }
+    .roto-icono small { font-size: clamp(.55rem, 2.6vw, .75rem); line-height: 1.1; font-weight: 600; }
+
+    #mensaje { margin-top: 14px; font-size: 1.3rem; min-height: 1.6em; text-align: center; text-shadow: 0 1px 2px rgba(0,0,0,.3); }
+
+    /* ---------- Encabezado con logo ---------- */
+    #cabecera { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 6px; }
+    #logoTitulo { width: 52px; height: 52px; border-radius: 14px; object-fit: cover; background: #fff; box-shadow: 0 3px 10px rgba(0,0,0,.3); }
+    #cabecera h1 { margin: 0; font-size: clamp(1.5rem, 7vw, 2.2rem); line-height: 1.15; }
+
+    /* ---------- Multijugador ---------- */
+    #turno {
+      font-size: 1.25rem; font-weight: 700; margin-bottom: 8px; padding: 8px 18px; border-radius: 999px;
+      background: rgba(0,0,0,.28); text-align: center; border: 3px solid var(--c, transparent);
+    }
+    #marcador { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 440px; margin-bottom: 12px; }
+    .jug {
+      flex: 1 1 90px; background: #fff; color: #2d3436; border-radius: 12px; padding: 8px 10px;
+      border-top: 6px solid var(--c); text-align: center; opacity: .8; transition: transform .2s, opacity .2s;
+    }
+    .jug.activo { opacity: 1; transform: scale(1.06); box-shadow: 0 0 0 3px #fff, 0 4px 14px rgba(0,0,0,.35); }
+    .jug .nom { font-weight: 700; font-size: .95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .jug .pts { font-size: 1.6rem; font-weight: 800; line-height: 1.1; }
+    .jug .pts small { font-size: .7rem; font-weight: 600; color: #636e72; }
+
+    #resultados { position: fixed; inset: 0; z-index: 45; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .tarjeta-res { background: #fff; color: #2d3436; border-radius: 20px; padding: 20px; width: 100%; max-width: 360px; text-align: center; }
+    .tarjeta-res h2 { margin: 0 0 4px; font-size: 1.6rem; }
+    #resDetalle { margin: 0 0 12px; color: #636e72; }
+    #resLista { list-style: none; padding: 0; margin: 0 0 16px; }
+    #resLista li { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; margin-bottom: 6px; border-radius: 10px; background: #f1f2f6; border-left: 6px solid var(--c); font-weight: 700; }
+    #resLista li.gana { background: #ffeaa7; }
+    .tarjeta-res button { background: #6c5ce7; color: #fff; margin: 4px; }
+    .tarjeta-res button.sec { background: #dfe6e9; color: #2d3436; }
+
+    /* ---------- Bienvenida ---------- */
+    #bienvenida {
+      position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center;
+      background: linear-gradient(160deg, var(--tema), var(--tema2)); transition: opacity .45s;
+    }
+    #bienvenida.oculta { opacity: 0; pointer-events: none; }
+    #bLogo { width: 120px; height: 120px; border-radius: 28px; object-fit: cover; background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+    #bApp { margin: 6px 0 0; font-size: 2rem; }
+    #bEquipo { margin: 0; font-size: 1.3rem; font-weight: 600; }
+    #bFrase { margin: 0 0 14px; font-size: 1.05rem; opacity: .95; max-width: 320px; }
+    #bJugar { font-size: 1.2rem; padding: 12px 36px; border-radius: 14px; }
+
+    /* ---------- Ajustes ---------- */
+    #ajustes { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; justify-content: center; }
+    .panel { background: #fff; color: #2d3436; width: 100%; max-width: 480px; max-height: 92vh; overflow-y: auto; border-radius: 18px 18px 0 0; padding: 16px; }
+    .panel h2 { margin: 0 0 8px; }
+    details { border: 1px solid #dfe6e9; border-radius: 12px; margin-bottom: 10px; padding: 10px 12px; }
+    summary { font-weight: 700; cursor: pointer; }
+    details label { display: block; margin-top: 10px; font-size: .9rem; font-weight: 600; }
+    .panel input[type=text], .panel input[type=url], .panel select, .panel textarea {
+      width: 100%; margin-top: 4px; padding: 9px 10px; font-size: 1rem; border: 1px solid #b2bec3;
+      border-radius: 8px; background: #fff; color: #2d3436; font-weight: normal;
+    }
+    .panel textarea { min-height: 120px; resize: vertical; font-size: .9rem; }
+    .panel input[type=color] { width: 64px; height: 38px; border: 2px solid #b2bec3; border-radius: 8px; padding: 0; background: none; margin-top: 4px; }
+    .panel button { background: #6c5ce7; color: #fff; }
+    .panel button.sec { background: #dfe6e9; color: #2d3436; }
+    .fila { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .ayuda { font-size: .82rem; color: #636e72; margin: 6px 0 0; font-weight: normal; }
+    .estado { font-size: .85rem; margin: 6px 0 0; font-weight: 600; }
+    #listaLinks { list-style: none; padding: 0; margin: 8px 0 0; font-size: .82rem; }
+    #listaLinks li { padding: 2px 0; word-break: break-all; }
+    .chk { display: flex !important; align-items: center; gap: 8px; }
+    .chk input { width: 22px; height: 22px; }
+  </style>
+</head>
+<body>
+
+  <!-- Pantalla de bienvenida -->
+  <div id="bienvenida">
+    <img id="bLogo" alt="Logo del equipo">
+    <h1 id="bApp"></h1>
+    <p id="bEquipo"></p>
+    <p id="bFrase"></p>
+    <button id="bJugar">▶ Jugar</button>
+  </div>
+
+  <div id="cabecera"><img id="logoTitulo" alt=""><h1 id="titulo">Memorama</h1></div>
+  <div id="subtitulo"></div>
+
+  <div class="barra">
+    <select id="nivel" aria-label="Nivel">
+      <option value="facil">Fácil (12 cartas)</option>
+      <option value="medio">Medio (20 cartas)</option>
+      <option value="dificil">Difícil (24 cartas)</option>
+    </select>
+    <select id="numJug" aria-label="Jugadores">
+      <option value="1">1 jugador</option>
+      <option value="2">2 jugadores</option>
+      <option value="3">3 jugadores</option>
+      <option value="4">4 jugadores</option>
+    </select>
+    <button id="reiniciar">Nuevo juego</button>
+    <button id="bAjustes">⚙️ Ajustes</button>
+  </div>
+  <div class="barra">
+    <span>Movimientos: <b id="movs">0</b></span>
+    <span>Tiempo: <b id="tiempo">0</b>s</span>
+    <span id="spRecord">Récord: <b id="record">-</b></span>
+  </div>
+
+  <div id="turno" class="oculto"></div>
+  <div id="marcador" class="oculto"></div>
+  <div id="tablero"></div>
+  <div id="mensaje"></div>
+
+  <!-- Resultados finales (multijugador) -->
+  <div id="resultados" class="oculto">
+    <div class="tarjeta-res">
+      <h2 id="resTitulo"></h2>
+      <p id="resDetalle"></p>
+      <ul id="resLista"></ul>
+      <button id="resOtra">🔄 Jugar otra vez</button>
+      <button class="sec" id="resCerrar">Cerrar</button>
+    </div>
+  </div>
+
+  <!-- Panel de ajustes -->
+  <div id="ajustes" class="oculto">
+    <div class="panel">
+      <h2>⚙️ Ajustes</h2>
+
+      <details open>
+        <summary>🏷️ Marca del equipo</summary>
+        <label>Nombre de la app <input type="text" id="iApp" maxlength="24"></label>
+        <label>Nombre del equipo <input type="text" id="iEquipo" maxlength="30"></label>
+        <label>Frase <input type="text" id="iFrase" maxlength="60"></label>
+        <label>Color de tema <br><input type="color" id="iTema"></label>
+        <label>Logo del equipo <input type="file" id="iLogo" accept="image/*"></label>
+        <div class="fila"><button class="sec" id="quitarLogo">Quitar logo</button></div>
+      </details>
+
+      <details>
+        <summary>🎴 Dorso de las cartas</summary>
+        <label>Tipo de dorso
+          <select id="iTipoDorso">
+            <option value="color">Color sólido</option>
+            <option value="imagen">Imagen (pegar link)</option>
+            <option value="textura">Textura</option>
+            <option value="logo">Logo del equipo</option>
+          </select>
+        </label>
+        <label id="grpColorDorso">Color del dorso <br><input type="color" id="iColorDorso"></label>
+        <div id="grpImagenDorso" class="oculto">
+          <label>Link de la imagen <input type="url" id="iUrlDorso" placeholder="https://..."></label>
+          <p class="estado" id="estadoDorso"></p>
+        </div>
+        <label id="grpTextura" class="oculto">Textura
+          <select id="iTextura">
+            <option value="puntos">Puntos</option>
+            <option value="rayas">Rayas</option>
+            <option value="cuadros">Cuadros</option>
+            <option value="rejilla">Rejilla</option>
+          </select>
+        </label>
+        <p class="ayuda" id="ayudaLogo">El logo se elige en "Marca del equipo". Si no subes uno, se usa el ícono de la app.</p>
+      </details>
+
+      <details>
+        <summary>🖼️ Caras de las cartas</summary>
+        <label>Usar
+          <select id="iModoCaras">
+            <option value="emojis">Emojis</option>
+            <option value="imagenes">Imágenes propias (links)</option>
+          </select>
+        </label>
+        <div id="grpLinks" class="oculto">
+          <label>Un link por línea <textarea id="iLinks" placeholder="https://images.unsplash.com/...&#10;https://cdn.pixabay.com/..."></textarea></label>
+          <p class="ayuda">Usa el link <b>directo a la imagen</b> (mantén presionada la imagen → "Copiar dirección de la imagen"). Si pones menos links que parejas, se completa con emojis.</p>
+          <ul id="listaLinks"></ul>
+        </div>
+      </details>
+
+      <details>
+        <summary>🎨 Colores y números</summary>
+        <label>Frente de la carta <br><input type="color" id="iFrente"></label>
+        <label>Pareja encontrada <br><input type="color" id="iAcierto"></label>
+        <label class="chk"><input type="checkbox" id="iNumeros"> Mostrar número en cada carta</label>
+      </details>
+
+      <details>
+        <summary>👥 Nombres de los jugadores</summary>
+        <p class="ayuda">La cantidad de jugadores se elige arriba, junto al nivel. Los nombres son opcionales.</p>
+        <label id="lNom0">Jugador 1 <input type="text" id="iNom0" maxlength="14"></label>
+        <label id="lNom1">Jugador 2 <input type="text" id="iNom1" maxlength="14"></label>
+        <label id="lNom2">Jugador 3 <input type="text" id="iNom2" maxlength="14"></label>
+        <label id="lNom3">Jugador 4 <input type="text" id="iNom3" maxlength="14"></label>
+      </details>
+
+      <div class="fila">
+        <button id="bCerrar">Guardar y cerrar</button>
+        <button class="sec" id="bRestaurar">Restaurar todo</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+
+    /* ===== VALORES POR DEFECTO — cámbialos aquí para dar tu identidad desde el inicio ===== */
+    const DEF = {
+      app: 'Memorama',
+      equipo: 'Mi Equipo',
+      frase: '¡Encuentra todas las parejas!',
+      tema: '#6c5ce7',
+      logo: '',
+      dorso: { tipo: 'color', color: '#4834d4', url: '', textura: 'puntos' },
+      caras: { modo: 'emojis', links: [] },
+      frente: '#ffffff',
+      acierto: '#55efc4',
+      numeros: true,
+      numJugadores: 1,
+      nombres: ['Jugador 1', 'Jugador 2', 'Jugador 3', 'Jugador 4']
+    };
+    /* ======================================================================================= */
+
+    const EMOJIS = ['🐶','🐱','🐸','🦊','🐼','🐵','🦁','🐯','🐙','🦄','🐢','🐧'];
+    const NIVELES = { facil: { pares: 6, cols: 3 }, medio: { pares: 10, cols: 4 }, dificil: { pares: 12, cols: 4 } };
+
+    function leer(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+    function escribir(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+    function esColor(c) { return typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c); }
+    function esUrl(u) { return typeof u === 'string' && /^https?:\/\//i.test(u.trim()); }
+
+    function cargar() {
+      let s = null;
+      try { s = JSON.parse(leer('memorama_cfg') || 'null'); } catch (e) {}
+      const c = JSON.parse(JSON.stringify(DEF));
+      if (s && typeof s === 'object') {
+        Object.assign(c, s);
+        c.dorso = Object.assign({}, DEF.dorso, s.dorso);
+        c.caras = Object.assign({}, DEF.caras, s.caras);
+      } else {
+        // Migrar colores guardados por la versión anterior
+        const a = leer('color_dorso'), b = leer('color_frente'), d = leer('color_acierto');
+        if (esColor(a)) c.dorso.color = a;
+        if (esColor(b)) c.frente = b;
+        if (esColor(d)) c.acierto = d;
+      }
+      if (!Array.isArray(c.caras.links)) c.caras.links = [];
+      c.numJugadores = Math.min(4, Math.max(1, parseInt(c.numJugadores) || 1));
+      if (!Array.isArray(c.nombres)) c.nombres = DEF.nombres.slice();
+      for (let i = 0; i < 4; i++) {
+        if (typeof c.nombres[i] !== 'string' || !c.nombres[i].trim()) c.nombres[i] = DEF.nombres[i];
+      }
+      ['tema', 'frente', 'acierto'].forEach(k => { if (!esColor(c[k])) c[k] = DEF[k]; });
+      if (!esColor(c.dorso.color)) c.dorso.color = DEF.dorso.color;
+      return c;
+    }
+    let cfg = cargar();
+    function guardar() { escribir('memorama_cfg', JSON.stringify(cfg)); }
+
+    /* ---------- Colores y marca ---------- */
+    function mezclarColor(hex, t) {
+      const n = parseInt(hex.slice(1), 16);
+      let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+      r = Math.round(r + (255 - r) * t); g = Math.round(g + (255 - g) * t); b = Math.round(b + (255 - b) * t);
+      return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    }
+    function aplicarColores() {
+      const s = document.documentElement.style;
+      s.setProperty('--tema', cfg.tema);
+      s.setProperty('--tema2', mezclarColor(cfg.tema, .35));
+      s.setProperty('--dorso', cfg.dorso.color);
+      s.setProperty('--frente', cfg.frente);
+      s.setProperty('--acierto', cfg.acierto);
+      $('metaTema').setAttribute('content', cfg.tema);
+    }
+    function aplicarMarca() {
+      const logo = cfg.logo || 'icon-192.png';
+      document.title = cfg.app;
+      $('titulo').textContent = cfg.app;
+      $('logoTitulo').src = logo;
+      $('subtitulo').textContent = cfg.equipo + ' · ' + cfg.frase;
+      $('bApp').textContent = cfg.app;
+      $('bEquipo').textContent = cfg.equipo;
+      $('bFrase').textContent = cfg.frase;
+      $('bLogo').src = logo;
+    }
+
+    /* ---------- Piezas de las cartas ---------- */
+    function crearImg(src, clase, alFallar) {
+      const im = new Image();
+      im.className = clase; im.alt = ''; im.draggable = false; im.referrerPolicy = 'no-referrer';
+      im.onerror = () => { if (alFallar) alFallar(im); };
+      im.src = src;
+      return im;
+    }
+    function insignia(n) {
+      const s = document.createElement('span');
+      s.className = 'num'; s.textContent = n;
+      return s;
+    }
+    function signo() {
+      const q = document.createElement('span');
+      q.className = 'signo'; q.textContent = '❓';
+      return q;
+    }
+    function iconoRoto() {
+      const d = document.createElement('div');
+      d.className = 'roto-icono';
+      d.innerHTML = '<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M3 17l5-4 4 3 3-2 6 4"/><path d="M4 4l16 16" stroke="#d63031" stroke-width="2.2"/></svg><small>Imagen no disponible</small>';
+      return d;
+    }
+    function llenarDorso(el, num) {
+      const d = cfg.dorso;
+      el.className = 'cara frente' + (d.tipo === 'textura' ? ' tex-' + d.textura : '') + (d.tipo === 'logo' ? ' modo-logo' : '');
+      el.replaceChildren();
+      if (d.tipo === 'imagen' && esUrl(d.url)) {
+        el.appendChild(crearImg(d.url.trim(), 'cubrir', im => im.replaceWith(signo())));
+      } else if (d.tipo === 'logo') {
+        el.appendChild(crearImg(cfg.logo || 'icon-192.png', 'logo'));
+      } else {
+        el.appendChild(signo());
+      }
+      if (cfg.numeros) el.appendChild(insignia(num));
+    }
+    function llenarCara(el, item, num) {
+      el.className = 'cara atras';
+      el.replaceChildren();
+      if (item.tipo === 'img') {
+        el.appendChild(crearImg(item.v, 'cubrir', im => { el.classList.add('rota'); im.replaceWith(iconoRoto()); }));
+      } else {
+        const s = document.createElement('span');
+        s.textContent = item.v;
+        el.appendChild(s);
+      }
+      if (cfg.numeros) el.appendChild(insignia(num));
+    }
+    function repintarCartas() {
+      document.querySelectorAll('.carta').forEach(c => {
+        const num = +c.dataset.num;
+        llenarDorso(c.querySelector('.interior').children[0], num);
+        llenarCara(c.querySelector('.interior').children[1], c._item, num);
+      });
+    }
+
+    /* ---------- Juego ---------- */
+    const tablero = $('tablero'), movsEl = $('movs'), tiempoEl = $('tiempo'), recordEl = $('record'), mensajeEl = $('mensaje'), nivelEl = $('nivel');
+    let primera = null, bloqueo = false, movs = 0, aciertos = 0, pares = 0, segundos = 0, timer = null;
+    let turno = 0, puntos = [], terminado = false, partida = 0;
+    const COLORES_JUG = ['#e17055', '#0984e3', '#00b894', '#e84393'];
+
+    /* ---------- Multijugador: turno y marcador ---------- */
+    function nombreJ(i) { return cfg.nombres[i]; }
+
+    function pintarMarcador() {
+      const n = cfg.numJugadores, multi = n > 1;
+      $('turno').classList.toggle('oculto', !multi);
+      $('marcador').classList.toggle('oculto', !multi);
+      $('spRecord').classList.toggle('oculto', multi);
+      if (!multi) return;
+
+      // Paso 1: de quién es el turno
+      const t = $('turno');
+      t.textContent = terminado ? '🏁 Fin de la partida' : '🎯 Turno de ' + nombreJ(turno);
+      t.style.setProperty('--c', terminado ? 'transparent' : COLORES_JUG[turno]);
+
+      // Paso 3: puntos de cada jugador
+      const m = $('marcador');
+      m.replaceChildren();
+      for (let i = 0; i < n; i++) {
+        const d = document.createElement('div');
+        d.className = 'jug' + (i === turno && !terminado ? ' activo' : '');
+        d.style.setProperty('--c', COLORES_JUG[i]);
+        const nom = document.createElement('div');
+        nom.className = 'nom'; nom.textContent = nombreJ(i);
+        const pts = document.createElement('div');
+        pts.className = 'pts'; pts.textContent = puntos[i];
+        const sm = document.createElement('small');
+        sm.textContent = puntos[i] === 1 ? ' punto' : ' puntos';
+        pts.appendChild(sm);
+        d.append(nom, pts);
+        m.appendChild(d);
+      }
+    }
+
+    function mostrarResultados() {
+      const n = cfg.numJugadores;
+      const orden = [...Array(n).keys()].sort((a, b) => puntos[b] - puntos[a]);
+      const max = puntos[orden[0]];
+      const ganadores = orden.filter(i => puntos[i] === max);
+      const titulo = ganadores.length === 1 ? '🏆 ¡Ganó ' + nombreJ(ganadores[0]) + '!' : '🤝 ¡Empate!';
+      $('resTitulo').textContent = titulo;
+      $('resDetalle').textContent = (ganadores.length > 1 ? 'Empatan: ' + ganadores.map(nombreJ).join(', ') + ' · ' : '') + movs + ' movimientos · ' + segundos + 's';
+      const ul = $('resLista');
+      ul.replaceChildren();
+      orden.forEach((i, pos) => {
+        const li = document.createElement('li');
+        li.style.setProperty('--c', COLORES_JUG[i]);
+        if (puntos[i] === max) li.className = 'gana';
+        const a = document.createElement('span');
+        a.textContent = (puntos[i] === max ? '🏆 ' : (pos + 1) + '. ') + nombreJ(i);
+        const b = document.createElement('span');
+        b.textContent = puntos[i] + (puntos[i] === 1 ? ' punto' : ' puntos');
+        li.append(a, b);
+        ul.appendChild(li);
+      });
+      mensajeEl.textContent = titulo + ' (' + segundos + 's)';
+      $('resultados').classList.remove('oculto');
+    }
+
+    function claveRecord() { return 'record_' + nivelEl.value; }
+    function mostrarRecord() {
+      const r = leer(claveRecord());
+      recordEl.textContent = r ? r + ' mov' : '-';
+    }
+    function mezclar(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+    function armarCaras(n) {
+      const links = cfg.caras.modo === 'imagenes' ? cfg.caras.links.filter(esUrl).map(u => u.trim()).slice(0, n) : [];
+      const items = [];
+      for (let i = 0; i < n; i++) {
+        items.push(i < links.length ? { tipo: 'img', v: links[i] } : { tipo: 'emoji', v: EMOJIS[i - links.length] });
+      }
+      return items;
+    }
+
+    function nuevoJuego() {
+      clearInterval(timer);
+      timer = null; segundos = 0; movs = 0; aciertos = 0; primera = null; bloqueo = false;
+      partida++; terminado = false; turno = 0; puntos = Array(cfg.numJugadores).fill(0);
+      $('resultados').classList.add('oculto');
+      movsEl.textContent = 0; tiempoEl.textContent = 0; mensajeEl.textContent = '';
+      const nv = NIVELES[nivelEl.value];
+      pares = nv.pares;
+      const mazo = [];
+      armarCaras(pares).forEach((it, i) => { mazo.push({ par: i, it }); mazo.push({ par: i, it }); });
+      mezclar(mazo);
+      tablero.style.gridTemplateColumns = 'repeat(' + nv.cols + ', 1fr)';
+      tablero.replaceChildren();
+      mazo.forEach((m, idx) => {
+        const c = document.createElement('div');
+        c.className = 'carta';
+        c.dataset.par = m.par; c.dataset.num = idx + 1; c._item = m.it;
+        c.setAttribute('role', 'button'); c.setAttribute('aria-label', 'Carta ' + (idx + 1));
+        const inn = document.createElement('div'); inn.className = 'interior';
+        const f = document.createElement('div'), a = document.createElement('div');
+        llenarDorso(f, idx + 1); llenarCara(a, m.it, idx + 1);
+        inn.append(f, a); c.append(inn);
+        c.addEventListener('click', () => voltear(c));
+        tablero.append(c);
+      });
+      mostrarRecord();
+      pintarMarcador();
+    }
+
+    function iniciarTiempo() {
+      if (timer) return;
+      timer = setInterval(() => { segundos++; tiempoEl.textContent = segundos; }, 1000);
+    }
+
+    function voltear(c) {
+      if (bloqueo || c === primera || c.classList.contains('acertada')) return;
+      iniciarTiempo();
+      c.classList.add('volteada');
+      if (!primera) { primera = c; return; }
+      movs++; movsEl.textContent = movs;
+      if (primera.dataset.par === c.dataset.par) {
+        // Acierto: suma punto y CONSERVA el turno
+        primera.classList.add('acertada'); c.classList.add('acertada');
+        primera = null; aciertos++;
+        puntos[turno]++;
+        pintarMarcador();
+        if (aciertos === pares) ganar();
+      } else {
+        // Fallo: se voltean de nuevo y pasa el turno al siguiente jugador
+        bloqueo = true;
+        const a = primera, miPartida = partida;
+        primera = null;
+        setTimeout(() => {
+          if (miPartida !== partida) return; // se inició otra partida mientras tanto
+          a.classList.remove('volteada'); c.classList.remove('volteada');
+          bloqueo = false;
+          if (cfg.numJugadores > 1) { turno = (turno + 1) % cfg.numJugadores; pintarMarcador(); }
+        }, 800);
+      }
+    }
+
+    function ganar() {
+      clearInterval(timer);
+      terminado = true;
+      if (cfg.numJugadores > 1) { pintarMarcador(); mostrarResultados(); return; }
+      let msg = '🎉 ¡Ganaste en ' + movs + ' movimientos y ' + segundos + 's!';
+      const r = leer(claveRecord());
+      if (!r || movs < parseInt(r)) { escribir(claveRecord(), movs); msg += ' ¡Nuevo récord!'; }
+      mensajeEl.textContent = msg;
+      mostrarRecord();
+    }
+
+    /* ---------- Ajustes: formulario ---------- */
+    let carasCambiaron = false;
+
+    function probarImagen(url, cb) {
+      const im = new Image();
+      im.onload = () => cb(true);
+      im.onerror = () => cb(false);
+      im.referrerPolicy = 'no-referrer';
+      im.src = url;
+    }
+    function mostrarGrupos() {
+      const t = cfg.dorso.tipo;
+      $('grpColorDorso').classList.toggle('oculto', t === 'imagen' || t === 'logo');
+      $('grpImagenDorso').classList.toggle('oculto', t !== 'imagen');
+      $('grpTextura').classList.toggle('oculto', t !== 'textura');
+      $('ayudaLogo').classList.toggle('oculto', t !== 'logo');
+      $('grpLinks').classList.toggle('oculto', cfg.caras.modo !== 'imagenes');
+      for (let i = 0; i < 4; i++) $('lNom' + i).classList.toggle('oculto', i >= cfg.numJugadores);
+    }
+    function revisarDorsoUrl() {
+      const est = $('estadoDorso'), u = cfg.dorso.url.trim();
+      if (!u) { est.textContent = ''; return; }
+      if (!esUrl(u)) { est.textContent = '❌ El link debe empezar con http:// o https://'; return; }
+      est.textContent = '⏳ Revisando…';
+      probarImagen(u, ok => { if (u === cfg.dorso.url.trim()) est.textContent = ok ? '✅ Imagen cargada' : '❌ No se pudo cargar (se usará el color sólido)'; });
+    }
+    function revisarLinks() {
+      const ul = $('listaLinks');
+      ul.replaceChildren();
+      cfg.caras.links.forEach((u, i) => {
+        const li = document.createElement('li');
+        let nombre = u;
+        try { nombre = new URL(u).hostname; } catch (e) {}
+        const pref = (i + 1) + '. ' + nombre + ' ';
+        if (!esUrl(u)) { li.textContent = pref + '❌ link no válido'; ul.appendChild(li); return; }
+        li.textContent = pref + '⏳';
+        ul.appendChild(li);
+        probarImagen(u.trim(), ok => { li.textContent = pref + (ok ? '✅' : '❌ no disponible'); });
+      });
+    }
+    function cargarFormulario() {
+      $('iApp').value = cfg.app; $('iEquipo').value = cfg.equipo; $('iFrase').value = cfg.frase; $('iTema').value = cfg.tema;
+      $('iTipoDorso').value = cfg.dorso.tipo; $('iColorDorso').value = cfg.dorso.color;
+      $('iUrlDorso').value = cfg.dorso.url; $('iTextura').value = cfg.dorso.textura;
+      $('iModoCaras').value = cfg.caras.modo; $('iLinks').value = cfg.caras.links.join('\n');
+      $('iFrente').value = cfg.frente; $('iAcierto').value = cfg.acierto; $('iNumeros').checked = cfg.numeros;
+      $('numJug').value = cfg.numJugadores;
+      for (let i = 0; i < 4; i++) $('iNom' + i).value = cfg.nombres[i];
+      mostrarGrupos();
+    }
+    function aplicarTodo() { aplicarColores(); aplicarMarca(); }
+
+    ['iApp', 'iEquipo', 'iFrase'].forEach(id => {
+      const campo = { iApp: 'app', iEquipo: 'equipo', iFrase: 'frase' }[id];
+      $(id).addEventListener('input', e => {
+        cfg[campo] = e.target.value.trim() || DEF[campo];
+        guardar(); aplicarMarca();
+      });
+    });
+    $('iTema').addEventListener('input', e => { cfg.tema = e.target.value; guardar(); aplicarColores(); });
+    $('iFrente').addEventListener('input', e => { cfg.frente = e.target.value; guardar(); aplicarColores(); });
+    $('iAcierto').addEventListener('input', e => { cfg.acierto = e.target.value; guardar(); aplicarColores(); });
+    $('iColorDorso').addEventListener('input', e => { cfg.dorso.color = e.target.value; guardar(); aplicarColores(); });
+
+    $('iTipoDorso').addEventListener('change', e => { cfg.dorso.tipo = e.target.value; guardar(); mostrarGrupos(); repintarCartas(); if (e.target.value === 'imagen') revisarDorsoUrl(); });
+    $('iTextura').addEventListener('change', e => { cfg.dorso.textura = e.target.value; guardar(); repintarCartas(); });
+    let tUrl = null;
+    $('iUrlDorso').addEventListener('input', e => {
+      cfg.dorso.url = e.target.value.trim(); guardar();
+      clearTimeout(tUrl); tUrl = setTimeout(() => { repintarCartas(); revisarDorsoUrl(); }, 500);
+    });
+
+    $('iModoCaras').addEventListener('change', e => {
+      cfg.caras.modo = e.target.value; guardar(); mostrarGrupos(); carasCambiaron = true;
+      if (e.target.value === 'imagenes') revisarLinks();
+    });
+    let tLinks = null;
+    $('iLinks').addEventListener('input', e => {
+      cfg.caras.links = e.target.value.split('\n').map(s => s.trim()).filter(Boolean);
+      guardar(); carasCambiaron = true;
+      clearTimeout(tLinks); tLinks = setTimeout(revisarLinks, 500);
+    });
+    $('iNumeros').addEventListener('change', e => { cfg.numeros = e.target.checked; guardar(); repintarCartas(); });
+
+    $('iLogo').addEventListener('change', e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const url = URL.createObjectURL(f), im = new Image();
+      im.onload = () => {
+        const c = document.createElement('canvas'); c.width = c.height = 192;
+        const x = c.getContext('2d');
+        const s = Math.max(192 / im.width, 192 / im.height), w = im.width * s, h = im.height * s;
+        x.drawImage(im, (192 - w) / 2, (192 - h) / 2, w, h);
+        cfg.logo = c.toDataURL('image/png');
+        URL.revokeObjectURL(url);
+        guardar(); aplicarMarca(); repintarCartas();
+      };
+      im.onerror = () => { URL.revokeObjectURL(url); alert('No se pudo leer esa imagen.'); };
+      im.src = url;
+    });
+    $('quitarLogo').addEventListener('click', () => { cfg.logo = ''; $('iLogo').value = ''; guardar(); aplicarMarca(); repintarCartas(); });
+
+    $('bAjustes').addEventListener('click', () => { cargarFormulario(); if (cfg.caras.modo === 'imagenes') revisarLinks(); $('ajustes').classList.remove('oculto'); });
+    $('bCerrar').addEventListener('click', () => {
+      $('ajustes').classList.add('oculto');
+      if (carasCambiaron) { carasCambiaron = false; nuevoJuego(); }
+    });
+    $('bRestaurar').addEventListener('click', () => {
+      if (!confirm('¿Restaurar todos los ajustes originales?')) return;
+      cfg = JSON.parse(JSON.stringify(DEF));
+      guardar(); aplicarTodo(); cargarFormulario(); nuevoJuego();
+    });
+
+    /* ---------- Jugadores ---------- */
+    $('numJug').addEventListener('change', e => {
+      cfg.numJugadores = parseInt(e.target.value) || 1;
+      guardar(); mostrarGrupos(); nuevoJuego();
+    });
+    for (let i = 0; i < 4; i++) {
+      $('iNom' + i).addEventListener('input', e => {
+        cfg.nombres[i] = e.target.value.trim() || DEF.nombres[i];
+        guardar(); pintarMarcador();
+      });
+    }
+    $('resOtra').addEventListener('click', nuevoJuego);
+    $('resCerrar').addEventListener('click', () => $('resultados').classList.add('oculto'));
+
+    /* ---------- Inicio ---------- */
+    $('bJugar').addEventListener('click', () => {
+      const b = $('bienvenida');
+      b.classList.add('oculta');
+      setTimeout(() => b.classList.add('oculto'), 500);
+    });
+    $('reiniciar').addEventListener('click', nuevoJuego);
+    nivelEl.addEventListener('change', nuevoJuego);
+
+    aplicarTodo();
+    $('numJug').value = cfg.numJugadores;
+    nuevoJuego();
+
+    // Service worker (necesario para la PWA)
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => console.log('SW error', err));
+      });
+    }
+  </script>
+</body>
+</html>
